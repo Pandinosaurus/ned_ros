@@ -179,17 +179,21 @@ class TestProduction:
 
     def send_report(self):
         new_report_publisher = rospy.Publisher('/niryo_robot_reports/test_report', String, queue_size=10)
+        rospy.sleep(0.5)
 
         # Wait for the publisher initialization
         start_time = rospy.Time.now()
         while not rospy.is_shutdown() and new_report_publisher.get_num_connections() == 0:
             if (rospy.Time.now() - start_time).to_sec() > 1:
                 rospy.logerr('Unable to publish the new report')
-                return
+                return False
             rospy.sleep(0.1)
 
         new_report_publisher.publish(json.dumps(self.get_report()))
+        rospy.sleep(1)
+        new_report_publisher.publish('')
         rospy.logdebug('test report published')
+        return True
 
 
 class TestFunctions(object):
@@ -590,7 +594,7 @@ class TestFunctions(object):
             self.__robot.led_ring.flashing(BLUE)
             report.append("End")
             self.say("Fin du test, validez la position 0")
-            report.execute(self.wait_save_button_press, "Wait save button press to validate")
+            report.execute(self.wait_save_button_press, "Wait save button press to validate", args=[600, ])
 
         self.__robot.led_ring.solid(BLUE)
         self.__robot.move_to_sleep_pose()
@@ -610,13 +614,13 @@ class TestFunctions(object):
         return 1, "Press detected"
 
     @staticmethod
-    def wait_save_button_press():
+    def wait_save_button_press(timeout=20):
         if not USE_BUTTON:
             # raw_input('Enter to continue')
             return 1, "Press save button step skipped"
 
         try:
-            rospy.wait_for_message("/niryo_robot/blockly/save_current_point", Int32, timeout=20)
+            rospy.wait_for_message("/niryo_robot/blockly/save_current_point", Int32, timeout=timeout)
             return 1, "Press detected"
         except rospy.ROSException:
 
@@ -665,14 +669,15 @@ if __name__ == '__main__':
             try:
                 set_setting = rospy.ServiceProxy('/niryo_robot_database/settings/set', SetSettings)
                 set_setting('sharing_allowed', 'True', 'bool')
+                set_setting('test_report_done', 'True', 'bool')
                 try:
                     robot.system_api_client.set_ethernet_auto()
-                    rospy.sleep(10)
+                    rospy.sleep(7)
 
                     test.send_report()
-                    set_setting('test_report_done', 'True', 'bool')
                 except Exception as _e:
                     pass
+                rospy.sleep(3)
                 set_setting('sharing_allowed', 'False', 'bool')
             except Exception as _e:
                 pass
